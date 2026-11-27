@@ -83,7 +83,7 @@ cat("Fieldspec band columns:", length(fieldspec_band_cols),
 # only the FieldSpec band NEAREST to each airborne band centre.
 # (A simple subset, not a full resampling with band widths.)
 
-use_hyper_bands <- TRUE  # <<< TOGGLE: TRUE = keep only bands matching the airborne sensor
+use_hyper_bands <- TRUE  # <<< TOGGLE: TRUE = keep only bands matching the planemounted sensor
 
 # Band-number -> wavelength lookup tables for the airborne VNIR and SWIR sensors
 hyper_vnir_lookup <- read.csv(path_root("//10.126.19.90/EAS_ind/ktiedeman/Dipteryx/data/VNIR_bandno_to_wavelength.csv"))
@@ -182,10 +182,10 @@ for (i in seq_along(trees_fs)) {
 loto_fs <- dplyr::bind_rows(loto_results_fs)
 names(loto_fs)[-(1:4)] <- paste0("pred_ncomp", seq_len(max_ncomp))
 
-## =====================================================================
+
 ## A5: CHOOSE NCOMP AND REPORT ACCURACY
-## =====================================================================
-# Pick the ncomp with the lowest held-out RMSE
+
+# Pick the ncomp with the lowest held-out RMSE, but replace if necessary 
 
 rmse_by_ncomp <- sapply(seq_len(max_ncomp), function(nc) {
   sqrt(mean((loto_fs$actual - loto_fs[[paste0("pred_ncomp", nc)]])^2, na.rm = TRUE))
@@ -197,8 +197,8 @@ cat("Best number of components:", best_ncomp_fs, "\n")
 
 loto_fs$pls_pred <- loto_fs[[paste0("pred_ncomp", best_ncomp_fs)]]
 
-r2_pls_fs        <- cor(loto_fs$actual, loto_fs$pls_pred, use = "complete.obs")^2
-rmse_pls_fs      <- sqrt(mean((loto_fs$actual - loto_fs$pls_pred)^2, na.rm = TRUE))
+r2_pls_fs <- cor(loto_fs$actual, loto_fs$pls_pred, use = "complete.obs")^2
+rmse_pls_fs <- sqrt(mean((loto_fs$actual - loto_fs$pls_pred)^2, na.rm = TRUE))
 baseline_rmse_fs <- sqrt(mean((loto_fs$actual - mean(loto_fs$actual))^2))  # always guess the mean
 
 cat("\n=== Fieldspec-only PLSR, scan-level, tree-grouped LOTO-CV results ===\n")
@@ -213,9 +213,9 @@ cat("Improvement over baseline:   ", round(baseline_rmse_fs - rmse_pls_fs, 2),
 ## CV accuracy above. ----
 plsr_fit_fs_final <- plsr(plsr_formula_fs, data = sugar_scans_vnir, ncomp = best_ncomp_fs, scale = TRUE)
 
-## =====================================================================
+#################################################
 ## A6: FIGURES
-## =====================================================================
+
 
 ## ---- predicted vs measured (dashed line = perfect prediction) ----
 fig_fs_pred <- ggplot(loto_fs, aes(x = actual, y = pls_pred)) +
@@ -228,8 +228,8 @@ fig_fs_pred <- ggplot(loto_fs, aes(x = actual, y = pls_pred)) +
        x = "Measured sugar", y = "LOTO-CV predicted sugar") +
   theme_bw(base_size = 12)
 print(fig_fs_pred)
-ggsave(paste0(out_folder_hyper, "FIGURE_fieldspec_plsr_sugar", band_tag, "_predicted_vs_actual.png"),
-       fig_fs_pred, width = 8, height = 6, dpi = 300)
+#ggsave(paste0(out_folder_hyper, "FIGURE_fieldspec_plsr_sugar", band_tag, "_predicted_vs_actual.png"),
+#       fig_fs_pred, width = 8, height = 6, dpi = 300)
 
 # This is boxy as all get out 
 
@@ -307,7 +307,11 @@ drop_water <- TRUE   # <<< TOGGLE: drop atmospheric water absorption bands
 step_nm    <- 1      # <<< TOGGLE: 1 = every band; 5 or 10 = thinned (faster). Keep 1 when use_hyper_bands = TRUE
 use_snv    <- TRUE   # <<< TOGGLE: SNV-normalise each spectrum (see B3)
 splice_correct <- TRUE  # <<< TOGGLE: fix detector jumps at ~1000 and ~1830 nm (see B2)
-match_airborne_bands <- FALSE  # <<< TOGGLE: also drop the airborne bad bands (900-1020 nm)
+
+match_airborne_bands <- TRUE  # <<< TOGGLE: also drop the airborne bad bands (900-1020 nm)
+
+
+
 ncomp_tol  <- 0.05   # <<< TOGGLE: pick the SMALLEST ncomp within 5% of the lowest RMSE
 #     (simpler models generalise better; 0 = just take the lowest)
 max_ncomp_cap <- 20  # <<< TOGGLE: most components ever tried
@@ -320,18 +324,20 @@ nutrient_name <- sub("_cor$", "", nutrient_col)   # e.g. "sugar"
 run_tag <- paste0(nutrient_name, "_fullrange", if (use_snv) "_snv" else "_raw",
                   if (match_airborne_bands) "_airbornebands" else "", band_tag)
 
-## =====================================================================
-## B1: NUTRIENT SCANS -- same filters as Part A, for the chosen nutrient
-## =====================================================================
+
+########## B1: NUTRIENT SCANS -- same filters as Part A, for the chosen nutrient
+#could be fiber or protein 
+
 
 nut_scans <- dataCLrip[dataCLrip$type == "Fruit" & dataCLrip$spot == 2 &
                          !is.na(dataCLrip[[nutrient_col]]) & dataCLrip[[nutrient_col]] != 0, ]
 nut_scans <- merge(nut_scans, newid_to_oldid, by.x = "TreeID", by.y = "TreeID2324")
 cat("\n", nutrient_name, "scans:", nrow(nut_scans), "| trees:", dplyr::n_distinct(nut_scans$newID), "\n")
 
-## =====================================================================
+####################
 ## B2: ASD DETECTOR SPLICE CORRECTION
-## =====================================================================
+
+
 # The FieldSpec has three detectors joined at ~1000 nm (VNIR/SWIR1) and
 # ~1830 nm (SWIR1/SWIR2), which leaves small steps in the spectrum. This
 # smooths them out. It needs bands on both sides of each join, so it runs
@@ -345,9 +351,9 @@ if (splice_correct) {
   cat("Splice correction applied at 1000 and 1830 nm\n")
 }
 
-## =====================================================================
+
 ## B3: BAND SELECTION + SNV
-## =====================================================================
+
 
 keep <- fieldspec_wl_all >= wl_min & fieldspec_wl_all <= wl_max
 if (drop_water) {
@@ -367,19 +373,22 @@ fs_wl   <- fieldspec_wl_all[keep]
 cat("Bands kept:", length(fs_cols), "| range:", min(fs_wl), "-", max(fs_wl), "nm",
     if (drop_water) "(water bands removed)" else "", "\n")
 
-## SNV (standard normal variate): centre and scale each spectrum by its OWN
+## SNV (standard normal variate): center and scale each spectrum by its own
 ## mean and SD across the bands used. This removes overall brightness
 ## differences (distance, angle, fruit surface), so the model has to use the
 ## SHAPE of the spectrum. Any new data the model is applied to (e.g. airborne
-## spectra resampled to these bands) must get SNV over the SAME band set.
+## spectra resampled to these bands) must get SNV over the  band set.
+
+
 snv <- function(m) {
   m <- as.matrix(m)
   t(apply(m, 1, function(x) (x - mean(x)) / sd(x)))
 }
 
-## ---- training table: the spectra go in as ONE matrix column called
-## 'spec', so the formula is simply nutrient ~ spec. (A formula with
-## ~1800 separate band names fails with "evaluation nested too deeply".) ----
+## ---- training table: the spectra go in as a matrix column called
+## 'spec', so the formula is simply nutrient ~ spec.
+
+
 nut_scans_full <- nut_scans[complete.cases(nut_scans[, fs_cols]), ]
 
 pls_df_full <- data.frame(
@@ -400,9 +409,9 @@ pls_df_full$spec <- I(spec_mat_full)
 cat("PLSR training table:", nrow(pls_df_full), "scans,",
     dplyr::n_distinct(pls_df_full$newID), "trees\n")
 
-## =====================================================================
-## B4: LEAVE-ONE-TREE-OUT CV (same idea as Part A)
-## =====================================================================
+#####################################
+## B4: LEAVE-ONE-TREE-OUT CV (same idea as before)
+
 
 max_ncomp_full <- min(max_ncomp_cap, length(fs_cols) - 1, dplyr::n_distinct(pls_df_full$newID) - 2)
 cat("Max PLS components tried:", max_ncomp_full, "\n")
@@ -434,7 +443,6 @@ names(loto_full)[-(1:5)] <- paste0("pred_ncomp", seq_len(max_ncomp_full))
 
 ## B5: CHOOSE NCOMP AND REPORT ACCURACY
 
-
 rmse_by_ncomp_full <- sapply(seq_len(max_ncomp_full), function(nc) {
   sqrt(mean((loto_full$actual - loto_full[[paste0("pred_ncomp", nc)]])^2, na.rm = TRUE))
 })
@@ -449,7 +457,7 @@ cat("Minimum-RMSE ncomp:", min_ncomp_full, "| chosen (within", 100 * ncomp_tol, 
 if (min_ncomp_full == max_ncomp_full)
   cat("NOTE: minimum is at the cap -- consider raising max_ncomp_cap.\n")
 
-## ---- RMSE curve figure (dashed line = chosen ncomp) ----
+#### RMSE curve figure (dashed line = chosen ncomp) 
 rmse_curve_df <- data.frame(ncomp = seq_along(rmse_by_ncomp_full), rmse = rmse_by_ncomp_full)
 fig_rmse_curve <- ggplot(rmse_curve_df, aes(ncomp, rmse)) +
   geom_line() + geom_point() +
@@ -473,7 +481,7 @@ cat("RMSE (scan-level):          ", round(rmse_full, 2), "\n")
 cat("Baseline RMSE (grand mean): ", round(base_full, 2), "\n")
 cat("Reduction vs baseline:      ", round(100 * (1 - rmse_full / base_full), 1), "%\n")
 
-## ---- final model on all scans (for loadings / VIP figures) ----
+## $$$final model on all scans (for loadings / figures)
 plsr_fit_full_final <- plsr(nutrient ~ spec, data = pls_df_full,
                             ncomp = best_ncomp_full, scale = TRUE)
 
@@ -485,7 +493,7 @@ range_lab <- paste0(min(fs_wl), "-", max(fs_wl), "nm", if (drop_water) ", water 
                     if (match_airborne_bands) ", 900-1020nm removed" else "", if (use_snv) ", SNV" else "",
                     if (use_hyper_bands) ", airborne bands" else "")
 
-## ---- predicted vs measured ----
+###predicted vs measured
 fig_full_pred <- ggplot(loto_full, aes(x = actual, y = pls_pred)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey50") +
   geom_point(alpha = 0.5, colour = "#e76f51", size = 1.5) +
@@ -501,7 +509,7 @@ fig_full_pred # looking less boxy
 #ggsave(paste0(out_folder_hyper, "FIGURE_fieldspec_", run_tag, "_plsr_predicted_vs_actual.png"),
 #       fig_full_pred, width = 8, height = 6, dpi = 300)
 
-## ---- loading weights (component 1) ----
+## loading weights (component 1) 
 loadings_df_full <- data.frame(
   band       = fs_cols,
   wavelength = fs_wl,
@@ -529,7 +537,7 @@ loadings_df_full <- loadings_df_full %>% dplyr::arrange(dplyr::desc(abs(loading)
 cat("\nTop 15 bands by |loading weight| (component 1):\n")
 print(head(loadings_df_full, 15))
 
-## ---- VIP scores: importance of each band across ALL chosen components
+## VIP scores: importance of each band across ALL chosen components
 ## (loading weights only show one component). VIP > 1 = "important". ----
 vip_df <- data.frame(wavelength = fs_wl,
                      vip = plsVarSel::VIP(plsr_fit_full_final, best_ncomp_full)) %>%
@@ -546,7 +554,7 @@ print(fig_vip)
 ggsave(paste0(out_folder_hyper, "FIGURE_fieldspec_", run_tag, "_plsr_vip.png"),
        fig_vip, width = 9, height = 5, dpi = 300)
 
-## ---- top bands vs the nutrient, one point per scan ----
+##  top bands vs the nutrient, one point per scan 
 top_n_bands    <- 10  # <<< TOGGLE
 top_bands_full <- loadings_df_full %>% dplyr::slice_head(n = top_n_bands) %>% dplyr::pull(band)
 
@@ -569,16 +577,13 @@ print(fig_full_top_bands)
 ggsave(paste0(out_folder_hyper, "FIGURE_fieldspec_", run_tag, "_individualfruit_topbands.png"),
        fig_full_top_bands, width = 10, height = 7, dpi = 300)
 
-## =====================================================================
+##################################
 ## B7: SAVE
-## =====================================================================
 
 saveRDS(plsr_fit_full_final, paste0(out_folder_hyper, "plsr_fieldspec_", run_tag, "_season1.rds"))
 saveRDS(loto_full,           paste0(out_folder_hyper, "loto_fieldspec_", run_tag, "_scanlevel_season1.rds"))
 saveRDS(loadings_df_full,    paste0(out_folder_hyper, "plsr_fieldspec_", run_tag, "_loadings_season1.rds"))
 saveRDS(pls_df_full,         paste0(out_folder_hyper, "scans_", run_tag, "_season1.rds"))
-
-cat("\nPART B done (", run_tag, ").\n")
 
 
 ####################################################################
@@ -655,9 +660,8 @@ cat("RMSE (scan-level):          ", round(rmse_r3, 2), "\n")
 cat("Baseline RMSE (round mean): ", round(base_r3, 2), "\n")
 cat("Reduction vs baseline:      ", round(100 * (1 - rmse_r3 / base_r3), 1), "%\n")
 
-## ---- final round-3 model on all round-3 scans (e.g. to apply to the
-## airborne image -- remember to resample + SNV the image spectra over
-## the same bands first) ----
+## final round-3 model on all round-3 scans (e.g. to apply to the
+## airborne image -- remember to resample + SNV the image spectra over the same bands first)
 plsr_fit_r3_final <- plsr(nutrient ~ spec, data = pls_df_r3, ncomp = best_ncomp_r3, scale = TRUE)
 
 
@@ -673,6 +677,7 @@ fig_r3_pred <- ggplot(loto_r3, aes(x = actual, y = pls_pred)) +
        x = paste("Measured", nutrient_name), y = paste("LOTO-CV predicted", nutrient_name)) +
   theme_bw(base_size = 12)
 print(fig_r3_pred)
+
 #ggsave(paste0(out_folder_hyper, "FIGURE_fieldspec_", run_tag, "_round", airborne_round, "_plsr_predicted_vs_actual.png"),
 #       fig_r3_pred, width = 8, height = 6, dpi = 300)
 
