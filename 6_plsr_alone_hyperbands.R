@@ -1,7 +1,7 @@
 ####################################################
 
 # This script 
-# PLSR on the FIELDSPEC scans directly  
+# PLSR on the FieldSpec scans directly  
 # I also tried a separate pixel-based approach in season1_sugar_treelevel_plsr.R.
 # Ground-measured spectra paired with real sugar values, no cross-sensor
 # VNIR only (500-900nm), used as measured -- no
@@ -9,7 +9,7 @@
 # elsewhere I smoothed airborne imagery with SG smoothing .
 #
 
-# Handled instead with a tree-grouped LOO-CV loop (holds out ALL of one
+# Handled instead with a tree-grouped LOO-CV loop (holds out all of one
 # tree's scans at once), not pls::plsr()'s built-in LOO.
 #
 
@@ -80,8 +80,9 @@ cat("Fieldspec band columns:", length(fieldspec_band_cols),
 ## MATCH TO THE AIRBORNE HYPERSPECTRAL BANDS
 # The FieldSpec measures every 1 nm; the airborne sensor has fewer, wider
 # bands. To make the FieldSpec models comparable with the imagery, keep
-# only the FieldSpec band NEAREST to each airborne band centre.
+# only the FieldSpec band nearest to each airborne band center
 # (A simple subset, not a full resampling with band widths.)
+#could also do a smoothing instead... 
 
 use_hyper_bands <- TRUE  # <<< TOGGLE: TRUE = keep only bands matching the planemounted sensor
 
@@ -94,7 +95,7 @@ hyper_swir_wl <- as.numeric(gsub(" nm", "", hyper_swir_lookup$Wavelength))
 hyper_swir_wl <- hyper_swir_wl[hyper_swir_wl >= 991]  # VNIR and SWIR overlap; use VNIR below 991 nm
 hyper_wl      <- c(hyper_vnir_wl, hyper_swir_wl)
 
-# Nearest FieldSpec wavelength to each airborne band centre
+# Nearest FieldSpec wavelength to each airborne band center
 hyper_fs_wl <- unique(sapply(hyper_wl, function(w) fieldspec_wl_all[which.min(abs(fieldspec_wl_all - w))]))
 in_hyper    <- if (use_hyper_bands) fieldspec_wl_all %in% hyper_fs_wl else rep(TRUE, length(fieldspec_wl_all))
 band_tag    <- if (use_hyper_bands) "_hyperbands" else ""   # added to output file names
@@ -133,7 +134,7 @@ fieldspec_vnir_cols <- fieldspec_band_cols[vnir_keep]
 fieldspec_vnir_wl   <- fieldspec_wl_all[vnir_keep]
 cat("VNIR-only (500-900nm), bands kept:", length(fieldspec_vnir_cols), "\n") 
 
-# (now uses only the bands that match the hyperspec -- see "MATCH TO THE AIRBORNE" above)
+# (now uses only the bands that match the hyperspec -- see the "Match to the airborne hyperspectral bands" section above)
 
 ## A3: TRAINING TABLE -- a subset 
 sugar_scans_vnir <- sugar_scans[, c("newID", "TreeID", "Date", "sugar_cor", fieldspec_vnir_cols)]
@@ -145,7 +146,7 @@ cat("\nPLSR training table (every scan, all dates):", nrow(sugar_scans_vnir), "r
 
 ## A4: LEAVE-ONE-TREE-OUT CV
 
-# For each tree: fit a fresh PLSR on all OTHER trees, predict this tree's
+# For each tree: fit a fresh PLSR on all other trees, predict this tree's
 # scans. Each fit tries 1 to max_ncomp components, so afterwards we have a
 # held-out prediction for every scan at every ncomp.
 
@@ -208,7 +209,7 @@ cat("Baseline RMSE (grand mean):  ", round(baseline_rmse_fs, 2), "\n")
 cat("Improvement over baseline:   ", round(baseline_rmse_fs - rmse_pls_fs, 2),
     "(", round(100 * (1 - rmse_pls_fs / baseline_rmse_fs), 1), "% reduction)\n")
 
-## ---- final model, fit on ALL scans -- used only for the loading-weights
+## ---- final model, fit on all scans -- used only for the loading-weights
 ## figure (no single CV fold's model is "the" model). Its accuracy is the
 ## CV accuracy above. ----
 plsr_fit_fs_final <- plsr(plsr_formula_fs, data = sugar_scans_vnir, ncomp = best_ncomp_fs, scale = TRUE)
@@ -219,8 +220,8 @@ plsr_fit_fs_final <- plsr(plsr_formula_fs, data = sugar_scans_vnir, ncomp = best
 
 ## ---- predicted vs measured (dashed line = perfect prediction) ----
 fig_fs_pred <- ggplot(loto_fs, aes(x = actual, y = pls_pred)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey50") +
-  geom_point(alpha = 0.5, colour = "#e76f51", size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+  geom_point(alpha = 0.5, color = "#e76f51", size = 1.5) +
   labs(title = "Fieldspec-based PLSR: predicted vs actual sugar, tree-grouped LOTO-CV",
        subtitle = paste0("R² = ", round(r2_pls_fs, 3), " | RMSE = ", round(rmse_pls_fs, 2),
                          " | n = ", nrow(loto_fs), " scans, ", dplyr::n_distinct(loto_fs$newID),
@@ -245,8 +246,8 @@ cat("\nTop 15 VNIR bands by |PLS loading weight| (component 1, final model on al
 print(head(loadings_df_fs, 15))
 
 fig_fs_loadings <- ggplot(loadings_df_fs %>% dplyr::arrange(wavelength), aes(x = wavelength, y = loading)) +
-  geom_hline(yintercept = 0, colour = "grey50") +
-  geom_line(colour = "#264653", linewidth = 0.6) +
+  geom_hline(yintercept = 0, color = "gray50") +
+  geom_line(color = "#264653", linewidth = 0.6) +
   labs(title = "Fieldspec PLSR loading weights by wavelength (VNIR)",
        subtitle = "Component 1 -- higher |weight| = more influence on the sugar prediction",
        x = "Wavelength (nm)", y = "Loading weight") +
@@ -265,8 +266,8 @@ top_band_scatter_data <- sugar_scans_vnir %>%
                 wl_label = reorder(paste0(wl, " nm"), wl))
 
 fig_fs_top_bands <- ggplot(top_band_scatter_data, aes(x = sugar_cor, y = reflectance)) +
-  geom_point(alpha = 0.4, size = 1, colour = "#2a9d8f") +
-  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, colour = "#e76f51", linewidth = 0.7) +
+  geom_point(alpha = 0.4, size = 1, color = "#2a9d8f") +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "#e76f51", linewidth = 0.7) +
   facet_wrap(~ wl_label, scales = "free_y") +
   labs(title = paste0("Individual fruit: top ", top_n_bands, " PLSR-important bands"),
        subtitle = "One point per fruit scan",
@@ -289,7 +290,7 @@ saveRDS(sugar_scans_vnir,  paste0(out_folder_hyper, "sugar_scans_vnir_all", band
 
 
 ####################################################################
-## PART B: FULL RANGE (VNIR + SWIR) -- sugar OR protein
+## PART B: FULL RANGE (VNIR + SWIR) -- sugar or protein
 ## Run once with nutrient_col = "sugar_cor", then again with the
 ## protein column. Output files are named by nutrient, so nothing
 ## is overwritten.
@@ -305,15 +306,15 @@ wl_min     <- 450    # <<< TOGGLE: shortest wavelength used (nm)
 wl_max     <- 2300   # <<< TOGGLE: longest wavelength used (nm)
 drop_water <- TRUE   # <<< TOGGLE: drop atmospheric water absorption bands
 step_nm    <- 1      # <<< TOGGLE: 1 = every band; 5 or 10 = thinned (faster). Keep 1 when use_hyper_bands = TRUE
-use_snv    <- TRUE   # <<< TOGGLE: SNV-normalise each spectrum (see B3)
+use_snv    <- TRUE   # <<< TOGGLE: SNV-normalize each spectrum (see B3)
 splice_correct <- TRUE  # <<< TOGGLE: fix detector jumps at ~1000 and ~1830 nm (see B2)
 
 match_airborne_bands <- TRUE  # <<< TOGGLE: also drop the airborne bad bands (900-1020 nm)
 
 
 
-ncomp_tol  <- 0.05   # <<< TOGGLE: pick the SMALLEST ncomp within 5% of the lowest RMSE
-#     (simpler models generalise better; 0 = just take the lowest)
+ncomp_tol  <- 0.05   # <<< TOGGLE: pick the smallest ncomp within 5% of the lowest RMSE
+#     (simpler models generalize better; 0 = just take the lowest)
 max_ncomp_cap <- 20  # <<< TOGGLE: most components ever tried
 round_col  <- "Round"  # <<< TOGGLE: name of the collection-round column (used in Part C)
 
@@ -341,7 +342,7 @@ cat("\n", nutrient_name, "scans:", nrow(nut_scans), "| trees:", dplyr::n_distinc
 # The FieldSpec has three detectors joined at ~1000 nm (VNIR/SWIR1) and
 # ~1830 nm (SWIR1/SWIR2), which leaves small steps in the spectrum. This
 # smooths them out. It needs bands on both sides of each join, so it runs
-# on the FULL 350-2500 nm spectrum BEFORE we drop any bands.
+# on the full 350-2500 nm spectrum before we drop any bands.
 
 if (splice_correct) {
   nut_scans <- nut_scans[complete.cases(nut_scans[, fieldspec_band_cols]), ]
@@ -366,7 +367,7 @@ if (match_airborne_bands) {
   keep <- keep & !(fieldspec_wl_all >= 900 & fieldspec_wl_all <= 1020)
 }
 keep <- keep & (fieldspec_wl_all %% step_nm == 0)
-keep <- keep & in_hyper   # airborne bands only (see "MATCH TO THE AIRBORNE" above)
+keep <- keep & in_hyper   # airborne bands only (see the "Match to the airborne hyperspectral bands" section above)
 
 fs_cols <- fieldspec_band_cols[keep]
 fs_wl   <- fieldspec_wl_all[keep]
@@ -376,7 +377,7 @@ cat("Bands kept:", length(fs_cols), "| range:", min(fs_wl), "-", max(fs_wl), "nm
 ## SNV (standard normal variate): center and scale each spectrum by its own
 ## mean and SD across the bands used. This removes overall brightness
 ## differences (distance, angle, fruit surface), so the model has to use the
-## SHAPE of the spectrum. Any new data the model is applied to (e.g. airborne
+## shape of the spectrum. Any new data the model is applied to (e.g. airborne
 ## spectra resampled to these bands) must get SNV over the  band set.
 
 
@@ -461,7 +462,7 @@ if (min_ncomp_full == max_ncomp_full)
 rmse_curve_df <- data.frame(ncomp = seq_along(rmse_by_ncomp_full), rmse = rmse_by_ncomp_full)
 fig_rmse_curve <- ggplot(rmse_curve_df, aes(ncomp, rmse)) +
   geom_line() + geom_point() +
-  geom_vline(xintercept = best_ncomp_full, linetype = "dashed", colour = "#e76f51") +
+  geom_vline(xintercept = best_ncomp_full, linetype = "dashed", color = "#e76f51") +
   labs(title = paste0("LOTO-CV RMSE by number of components (", run_tag, ")"),
        subtitle = paste0("Dashed: chosen ncomp = ", best_ncomp_full),
        x = "Number of PLS components", y = "RMSE") +
@@ -495,8 +496,8 @@ range_lab <- paste0(min(fs_wl), "-", max(fs_wl), "nm", if (drop_water) ", water 
 
 ###predicted vs measured
 fig_full_pred <- ggplot(loto_full, aes(x = actual, y = pls_pred)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey50") +
-  geom_point(alpha = 0.5, colour = "#e76f51", size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+  geom_point(alpha = 0.5, color = "#e76f51", size = 1.5) +
   labs(title = paste0("Fieldspec-based PLSR: predicted vs actual ", nutrient_name, ", tree-grouped LOTO-CV"),
        subtitle = paste0("R² = ", round(r2_full, 3), " | RMSE = ", round(rmse_full, 2),
                          " | n = ", nrow(loto_full), " scans, ",
@@ -518,13 +519,13 @@ loadings_df_full <- data.frame(
 
 # 'segment' gives each run of bands its own group, so the line breaks at
 # the removed water bands instead of bridging them. A jump of more than
-# 20 nm between neighbouring bands counts as a gap (airborne bands are a
+# 20 nm between neighboring bands counts as a gap (airborne bands are a
 # few nm apart).
 loadings_df_full$segment <- cumsum(c(1, diff(loadings_df_full$wavelength) > 20))
 
 fig_full_loadings <- ggplot(loadings_df_full, aes(x = wavelength, y = loading, group = segment)) +
-  geom_hline(yintercept = 0, colour = "grey50") +
-  geom_line(colour = "#264653", linewidth = 0.6) +
+  geom_hline(yintercept = 0, color = "gray50") +
+  geom_line(color = "#264653", linewidth = 0.6) +
   labs(title = paste0("Fieldspec PLSR loading weights by wavelength (VNIR + SWIR), ", nutrient_name),
        subtitle = "Component 1 -- higher |weight| = more influence on the first latent variable",
        x = "Wavelength (nm)", y = "Loading weight") +
@@ -537,15 +538,15 @@ loadings_df_full <- loadings_df_full %>% dplyr::arrange(dplyr::desc(abs(loading)
 cat("\nTop 15 bands by |loading weight| (component 1):\n")
 print(head(loadings_df_full, 15))
 
-## VIP scores: importance of each band across ALL chosen components
+## VIP scores: importance of each band across all chosen components
 ## (loading weights only show one component). VIP > 1 = "important". ----
 vip_df <- data.frame(wavelength = fs_wl,
                      vip = plsVarSel::VIP(plsr_fit_full_final, best_ncomp_full)) %>%
   dplyr::mutate(segment = cumsum(c(1, diff(wavelength) > 20)))
 
 fig_vip <- ggplot(vip_df, aes(wavelength, vip, group = segment)) +
-  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey50") +
-  geom_line(colour = "#264653", linewidth = 0.6) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray50") +
+  geom_line(color = "#264653", linewidth = 0.6) +
   labs(title = paste0("VIP scores, ", run_tag, " (", best_ncomp_full, " components)"),
        subtitle = "Dashed line: VIP = 1 (conventional importance threshold)",
        x = "Wavelength (nm)", y = "VIP") +
@@ -565,8 +566,8 @@ top_band_scatter_full <- data.frame(nutrient = pls_df_full$nutrient,
                 wl_label = reorder(paste0(wl, " nm"), wl))
 
 fig_full_top_bands <- ggplot(top_band_scatter_full, aes(x = nutrient, y = reflectance)) +
-  geom_point(alpha = 0.4, size = 1, colour = "#2a9d8f") +
-  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, colour = "#e76f51", linewidth = 0.7) +
+  geom_point(alpha = 0.4, size = 1, color = "#2a9d8f") +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "#e76f51", linewidth = 0.7) +
   facet_wrap(~ wl_label, scales = "free_y") +
   labs(title = paste0("Individual fruit: top ", top_n_bands, " PLSR-important bands (", run_tag, ")"),
        subtitle = "One point per fruit scan",
@@ -590,7 +591,7 @@ saveRDS(pls_df_full,         paste0(out_folder_hyper, "scans_", run_tag, "_seaso
 ####################################################################
 ## PART C: ROUND 3 ONLY -- the round closest to the airborne flight
 ## Run right after Part B: uses pls_df_full and the Part B settings
-## (same nutrient, bands, SNV). Fits a NEW model on round-3 scans only.
+## (same nutrient, bands, SNV). Fits a new model on round-3 scans only.
 ####################################################################
 ####################################################################
 
@@ -602,7 +603,7 @@ cat("Round", airborne_round, ":", nrow(pls_df_r3), "scans,",
     dplyr::n_distinct(pls_df_r3$newID), "trees | dates:",
     format(min(pls_df_r3$Date)), "to", format(max(pls_df_r3$Date)), "\n")
 
-## ---- how does the Part B model (trained on ALL rounds) do on round 3? ----
+## ---- how does the Part B model (trained on all rounds) do on round 3? ----
 loto_full_r3 <- loto_full[loto_full$round == airborne_round, ]
 cat("Part B (all-rounds) model, round-3 scans only: R² =",
     round(cor(loto_full_r3$actual, loto_full_r3$pls_pred)^2, 3), "| RMSE =",
@@ -667,8 +668,8 @@ plsr_fit_r3_final <- plsr(nutrient ~ spec, data = pls_df_r3, ncomp = best_ncomp_
 
 ## C3: FIGURE + SAVE
 fig_r3_pred <- ggplot(loto_r3, aes(x = actual, y = pls_pred)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey50") +
-  geom_point(alpha = 0.5, colour = "#e76f51", size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+  geom_point(alpha = 0.5, color = "#e76f51", size = 1.5) +
   labs(title = paste0("Round ", airborne_round, " only: predicted vs actual ", nutrient_name,
                       ", tree-grouped LOTO-CV"),
        subtitle = paste0("R² = ", round(r2_r3, 3), " | RMSE = ", round(rmse_r3, 2),
