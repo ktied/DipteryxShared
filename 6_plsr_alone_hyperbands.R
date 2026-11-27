@@ -13,7 +13,7 @@
 # tree's scans at once), not pls::plsr()'s built-in LOO.
 #
 
-#Things you might do: 
+#Things you might do: other nutrients, smoothing. not sure Martins bands now
 
 ####################################################
 
