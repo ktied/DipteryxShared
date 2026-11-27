@@ -299,7 +299,7 @@ saveRDS(sugar_scans_vnir,  paste0(out_folder_hyper, "sugar_scans_vnir_all", band
 
 
 ## B0: SETTINGS
-## =====================================================================
+
 nutrient_col <- "sugar_cor"  # <<< TOGGLE: "sugar_cor" or "Crude.Protein" (with a dot -- check names(dataCLrip))
 #     (check the name printed after loading)
 wl_min     <- 450    # <<< TOGGLE: shortest wavelength used (nm)
